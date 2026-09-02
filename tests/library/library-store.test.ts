@@ -12,6 +12,7 @@ import {
   type DirectoryHandleLike,
   type FileHandleLike,
   type LibraryItem,
+  type LibraryPort,
 } from "../../src/library/index.js";
 
 const bytes = (value: string) => new TextEncoder().encode(value);
@@ -536,5 +537,23 @@ describe("LibraryStore orchestration", () => {
 
     await expect(store.commit()).resolves.toMatchObject({ committed: 1 });
     expect(store.planSummary()).toEqual({ moves: 0, deletes: 0 });
+  });
+});
+
+
+describe("LibraryPort integration seam", () => {
+  it("accepts engine-owned staged moves without owning the engine plan", async () => {
+    const source = new MemoryDirectoryHandle("source");
+    const target = new MemoryDirectoryHandle("target");
+    const move = vi.fn(async () => undefined);
+    const handle = source.add(new MemoryFileHandle("a.jpg", "abc", { move })) as MemoryFileHandle;
+    const port: LibraryPort = new LibraryStore({
+      index: new IndexedDbPhotoIndex({ indexedDB: new IDBFactory(), dbName: "shoebox-port" }),
+      ledger: new CustodyLedger(),
+    });
+
+    await expect(port.commitMoves([
+      { id: "engine-owned", sourceDirectory: source, fileHandle: handle, targetDirectory: target, targetName: "a.jpg" },
+    ])).resolves.toEqual({ committed: 1, movedNatively: 1, copiedAndVerified: 0 });
   });
 });
