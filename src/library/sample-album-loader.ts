@@ -1,8 +1,9 @@
 import { CustodyLedger } from "./custody-ledger.js";
 import type { DirectoryHandleLike, LibraryItem } from "./types.js";
 
-interface SampleManifest {
-  files: Array<{ path: string }>;
+interface SampleManifestEntry {
+  id: string;
+  path: string;
 }
 
 interface SampleAlbumLoaderOptions {
@@ -40,11 +41,30 @@ function sameOriginUrl(raw: string, origin: string): URL {
   return url;
 }
 
-function isManifest(value: unknown): value is SampleManifest {
-  if (!value || typeof value !== "object" || !Array.isArray((value as SampleManifest).files)) return false;
-  return (value as SampleManifest).files.every(
-    (entry) => Boolean(entry) && typeof entry === "object" && typeof entry.path === "string",
-  );
+function manifestEntries(value: unknown): SampleManifestEntry[] | null {
+  if (!value || typeof value !== "object") return null;
+  const manifest = value as {
+    files?: Array<{ path?: unknown }>;
+    photos?: Array<{ id?: unknown; relative_path?: unknown }>;
+  };
+  if (Array.isArray(manifest.photos)) {
+    if (!manifest.photos.every((entry) =>
+      Boolean(entry) && typeof entry.id === "string" && entry.id.length > 0 &&
+      typeof entry.relative_path === "string"
+    )) return null;
+    return manifest.photos.map((entry) => ({
+      id: entry.id as string,
+      path: entry.relative_path as string,
+    }));
+  }
+  if (Array.isArray(manifest.files)) {
+    if (!manifest.files.every((entry) => Boolean(entry) && typeof entry.path === "string")) return null;
+    return manifest.files.map((entry) => ({
+      id: `sample:${entry.path as string}`,
+      path: entry.path as string,
+    }));
+  }
+  return null;
 }
 
 async function directoryForPath(
@@ -74,14 +94,21 @@ export class SampleAlbumLoader {
     const manifestResponse = await this.fetcher(manifestUrl.href);
     if (!manifestResponse.ok) throw new Error(`sample manifest fetch failed: ${manifestResponse.status}`);
     const rawManifest: unknown = await manifestResponse.json();
-    if (!isManifest(rawManifest)) throw new Error("invalid sample manifest");
+    const rawEntries = manifestEntries(rawManifest);
+    if (!rawEntries) throw new Error("invalid sample manifest");
 
     // Validate the complete manifest before performing the first OPFS write.
-    const paths = rawManifest.files.map(({ path }) => safeRelativePath(path));
+    const entries = rawEntries.map(({ id, path }) => ({ id, path: safeRelativePath(path) }));
+    if (new Set(entries.map(({ id }) => id)).size !== entries.length) {
+      throw new Error("duplicate sample photo id");
+    }
+    if (new Set(entries.map(({ path }) => path)).size !== entries.length) {
+      throw new Error("duplicate sample photo path");
+    }
     const manifestDirectory = new URL(".", manifestUrl);
     const items: LibraryItem[] = [];
 
-    for (const relativePath of paths) {
+    for (const { id, path: relativePath } of entries) {
       const assetUrl = sameOriginUrl(new URL(relativePath, manifestDirectory).href, this.origin);
       const response = await this.fetcher(assetUrl.href);
       if (!response.ok) throw new Error(`sample asset fetch failed (${response.status}): ${relativePath}`);
@@ -95,7 +122,7 @@ export class SampleAlbumLoader {
       await writer.close();
       const storedFile = await fileHandle.getFile();
       items.push({
-        id: `sample:${relativePath}`,
+        id,
         name,
         relativePath,
         size: storedFile.size,
