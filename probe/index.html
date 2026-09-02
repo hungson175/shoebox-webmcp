@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="origin-trial" content="An2udOLsUVYin2YuygomRe8nO8qa5GA6th8xcWUQwoZ9A4D5wLJUbu1wgHaZbBM6YbHKnaxMD+yCEYiAzS3wrQIAAABUeyJvcmlnaW4iOiJodHRwczovL2h1bmdzb24xNzUuZ2l0aHViLmlvOjQ0MyIsImZlYXR1cmUiOiJXZWJNQ1AiLCJleHBpcnkiOjE3OTQ4NzM2MDB9">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%234776e6'/%3E%3C/svg%3E">
+    <title>Shoebox capability probe</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 0; background: #10131a; color: #f2f4f8; }
+      main { width: min(48rem, calc(100% - 2rem)); margin: 2rem auto; }
+      .boundary { color: #b9c2d0; }
+      .results { display: grid; gap: .6rem; padding: 0; list-style: none; }
+      .result { display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; padding: .8rem; border: 1px solid #384355; border-radius: .55rem; }
+      .state { font-weight: 700; }
+      .detail { grid-column: 1 / -1; color: #b9c2d0; font-size: .9rem; }
+      button { padding: .7rem 1rem; border: 1px solid #91b8ff; border-radius: .4rem; background: #182945; color: inherit; cursor: pointer; }
+      .picker-result { color: #b9c2d0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Shoebox capability probe</h1>
+      <p class="boundary">Local-only capability checks. No photo bytes, remote assets, credentials, cookies, or personal paths are read or uploaded.</p>
+      <p id="result-legend">Result states: PASS / FAIL / UNAVAILABLE. Impact labels: KILL / GAP / FALLBACK.</p>
+      <ul id="probe-results" class="results" aria-live="polite">
+        <li id="status-worker" class="result"><span>Dedicated Worker round-trip</span><span class="state">UNAVAILABLE</span><span class="detail">Running local check…</span></li>
+        <li id="status-indexeddb" class="result"><span>IndexedDB put/get/delete</span><span class="state">UNAVAILABLE</span><span class="detail">Running local check…</span></li>
+        <li id="status-createimagebitmap" class="result"><span>Generated local image via createImageBitmap</span><span class="state">UNAVAILABLE</span><span class="detail">Running local check…</span></li>
+        <li id="status-opfs" class="result"><span>OPFS acquire, byte-exact write/read/move/cleanup</span><span class="state">UNAVAILABLE</span><span class="detail">Running local check…</span></li>
+        <li id="status-picker" class="result"><span>showDirectoryPicker presence</span><span class="state">UNAVAILABLE</span><span class="detail">Only a human click may open a real-folder picker.</span></li>
+        <li id="status-drop-handle" class="result"><span>DataTransferItem.getAsFileSystemHandle</span><span class="state">UNAVAILABLE</span><span class="detail">Running local check…</span></li>
+        <li id="status-webkitdirectory" class="result"><span>webkitdirectory fallback</span><span class="state">UNAVAILABLE</span><span class="detail">Running local check…</span></li>
+        <li id="status-webgpu" class="result"><span>WebGPU requestAdapter</span><span class="state">UNAVAILABLE</span><span class="detail">Running local check…</span></li>
+      </ul>
+      <button id="human-picker" type="button">Choose a real folder (human click only)</button>
+      <p id="picker-result" class="picker-result">Picker result: UNAVAILABLE — no picker is opened by the stub.</p>
+      <p id="tool-status">WebMCP status tool: UNAVAILABLE — waiting for automatic probes.</p>
+    </main>
+    <script type="module" src="./probe.js"></script>
+  </body>
+</html>
