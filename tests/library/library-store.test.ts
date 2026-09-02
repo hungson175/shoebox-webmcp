@@ -6,6 +6,7 @@ import {
   CommitExecutor,
   CustodyLedger,
   IndexedDbPhotoIndex,
+  LibraryStore,
   SampleAlbumLoader,
   StagedPlan,
   type DirectoryHandleLike,
@@ -30,7 +31,7 @@ class MemoryFileHandle implements FileHandleLike {
   }
 
   async getFile(): Promise<File> {
-    return new File([this.body], this.name, {
+    return new File([this.body.slice().buffer as ArrayBuffer], this.name, {
       type: "image/jpeg",
       lastModified: 42,
     });
@@ -412,5 +413,128 @@ describe("StagedPlan", () => {
     expect(source.children.has("a.jpg")).toBe(true);
     expect(source.removed).toEqual([]);
     expect(target.children).toHaveLength(0);
+  });
+});
+
+describe("library-store boundary and browser-default paths", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("uses the ambient picker when no picker is injected and fails clearly when absent", async () => {
+    const root = new MemoryDirectoryHandle("ambient");
+    root.add(new MemoryFileHandle("a.jpg", "a"));
+    const picker = vi.fn(async () => root);
+    vi.stubGlobal("showDirectoryPicker", picker);
+    expect((await new BrowserFolderSource().openPicker()).map(({ name }) => name)).toEqual(["a.jpg"]);
+    vi.stubGlobal("showDirectoryPicker", undefined);
+    await expect(new BrowserFolderSource().openPicker()).rejects.toThrow(/not supported/i);
+  });
+
+  it("keeps a lone dropped file read-only because no removable parent handle exists", async () => {
+    const handle = new MemoryFileHandle("solo.jpg", "photo");
+    const opened = await new BrowserFolderSource().openDroppedItems([
+      { kind: "file", getAsFileSystemHandle: async () => handle },
+    ]);
+    expect(opened).toMatchObject([{ name: "solo.jpg", writable: false, source: "drop" }]);
+  });
+
+  it("renders through OffscreenCanvas when no renderer is injected", async () => {
+    const drawImage = vi.fn();
+    const convertToBlob = vi.fn(async () => new Blob(["webp"], { type: "image/webp" }));
+    class FakeOffscreenCanvas {
+      constructor(readonly width: number, readonly height: number) {}
+      getContext() { return { drawImage }; }
+      convertToBlob = convertToBlob;
+    }
+    vi.stubGlobal("OffscreenCanvas", FakeOffscreenCanvas);
+    const bitmap = { width: 192, height: 96, close: vi.fn() } as unknown as ImageBitmap;
+    const result = await new BrowserThumbnailPipeline({
+      createImageBitmap: async () => bitmap,
+      ledger: new CustodyLedger(),
+    }).create(new File(["photo"], "a.jpg"));
+    expect(result).toMatchObject({ width: 96, height: 48, mimeType: "image/webp" });
+    expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 96, 48);
+    expect(convertToBlob).toHaveBeenCalledWith({ type: "image/webp", quality: 0.82 });
+  });
+
+  it("guards custody dimensions and can reset local counters", () => {
+    const ledger = new CustodyLedger();
+    ledger.recordIndexed([item()]);
+    expect(() => ledger.recordRequestedThumbnail(0, 96)).toThrow(RangeError);
+    ledger.recordRequestedThumbnail(96, 48);
+    ledger.reset();
+    expect(ledger.snapshot()).toEqual({
+      indexedFiles: 0,
+      localBytes: 0,
+      bytesUploaded: 0,
+      thumbnailGroupsRequested: 0,
+      thumbnailPixelsRequested: 0,
+    });
+  });
+
+  it("opens the provided OPFS storage root", async () => {
+    const root = new MemoryDirectoryHandle("opfs");
+    const { openOpfsRoot } = await import("../../src/library/index.js");
+    expect(await openOpfsRoot({ getDirectory: async () => root })).toBe(root);
+  });
+
+  it("does no IndexedDB transaction for an empty batch and reopens after close", async () => {
+    const factory = new IDBFactory();
+    const index = new IndexedDbPhotoIndex({ indexedDB: factory, dbName: "shoebox-close" });
+    await index.putMany([]);
+    await index.putMany([item()]);
+    await index.close();
+    expect(await index.get(item().id)).toMatchObject({ name: "a.jpg" });
+  });
+
+  it("validates the complete staged batch before moving any file", async () => {
+    const source = new MemoryDirectoryHandle("source");
+    const target = new MemoryDirectoryHandle("target");
+    const move = vi.fn(async () => undefined);
+    const handle = source.add(new MemoryFileHandle("a.jpg", "abc", { move })) as MemoryFileHandle;
+    const valid = { id: "same", sourceDirectory: source, fileHandle: handle, targetDirectory: target, targetName: "a.jpg" };
+    await expect(new CommitExecutor().execute([valid, valid])).rejects.toThrow(/duplicate/i);
+    await expect(new CommitExecutor().execute([{ ...valid, id: "bad", targetName: "../a.jpg" }])).rejects.toThrow(/filename/i);
+    expect(move).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed sample manifests and non-OK manifest responses", async () => {
+    const options = {
+      origin: "https://example.test",
+      root: new MemoryDirectoryHandle("root"),
+      ledger: new CustodyLedger(),
+    };
+    await expect(new SampleAlbumLoader({ ...options, fetcher: async () => new Response("missing", { status: 404 }) }).install("/manifest.json"))
+      .rejects.toThrow(/fetch failed/i);
+    await expect(new SampleAlbumLoader({ ...options, fetcher: async () => new Response("{}", { headers: { "content-type": "application/json" } }) }).install("/manifest.json"))
+      .rejects.toThrow(/invalid sample manifest/i);
+  });
+});
+
+
+describe("LibraryStore orchestration", () => {
+  it("atomically replaces the active index and custody totals", async () => {
+    const index = new IndexedDbPhotoIndex({ indexedDB: new IDBFactory(), dbName: "shoebox-store" });
+    const ledger = new CustodyLedger();
+    const store = new LibraryStore({ index, ledger });
+    await store.replace([item(), item({ id: "sample:b.jpg", relativePath: "b.jpg", size: 4 })]);
+    await store.replace([item({ id: "drop:new.jpg", relativePath: "new.jpg", size: 7, source: "drop" })]);
+
+    expect((await store.list()).map(({ id }) => id)).toEqual(["drop:new.jpg"]);
+    expect(store.custody()).toMatchObject({ indexedFiles: 1, localBytes: 7, bytesUploaded: 0 });
+  });
+
+  it("commits the current staged plan and clears it only after success", async () => {
+    const source = new MemoryDirectoryHandle("source");
+    const target = new MemoryDirectoryHandle("target");
+    const move = vi.fn(async () => undefined);
+    const handle = source.add(new MemoryFileHandle("a.jpg", "abc", { move })) as MemoryFileHandle;
+    const store = new LibraryStore({
+      index: new IndexedDbPhotoIndex({ indexedDB: new IDBFactory(), dbName: "shoebox-store-commit" }),
+      ledger: new CustodyLedger(),
+    });
+    store.stage({ id: "move", sourceDirectory: source, fileHandle: handle, targetDirectory: target, targetName: "a.jpg" });
+
+    await expect(store.commit()).resolves.toMatchObject({ committed: 1 });
+    expect(store.planSummary()).toEqual({ moves: 0, deletes: 0 });
   });
 });
