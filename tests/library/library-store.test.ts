@@ -583,3 +583,4 @@ describe("LibraryPort integration seam", () => {
     ])).resolves.toEqual({ committed: 1, movedNatively: 1, copiedAndVerified: 0 });
   });
 });
+// @vitest-environment node
