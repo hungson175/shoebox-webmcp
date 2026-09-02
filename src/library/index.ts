@@ -7,3 +7,4 @@ export * from "./thumbnail-pipeline.js";
 export * from "./commit-executor.js";
 
 export * from "./library-store.js";
+export * from "./library-port.js";

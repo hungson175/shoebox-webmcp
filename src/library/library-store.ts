@@ -1,6 +1,7 @@
 import { CommitExecutor, StagedPlan, type CommitReceipt } from "./commit-executor.js";
 import { CustodyLedger, type CustodySnapshot } from "./custody-ledger.js";
 import { IndexedDbPhotoIndex } from "./indexeddb-photo-index.js";
+import type { LibraryPort } from "./library-port.js";
 import type { LibraryItem, StagedMove } from "./types.js";
 
 interface LibraryStoreOptions {
@@ -11,7 +12,7 @@ interface LibraryStoreOptions {
 }
 
 /** The integration seam consumed by the UI and state-machine slices. */
-export class LibraryStore {
+export class LibraryStore implements LibraryPort {
   private readonly index: IndexedDbPhotoIndex;
   private readonly ledger: CustodyLedger;
   private readonly plan: StagedPlan;
@@ -55,8 +56,12 @@ export class LibraryStore {
     this.plan.discard();
   }
 
+  commitMoves(moves: readonly StagedMove[]): Promise<CommitReceipt> {
+    return this.executor.execute(moves);
+  }
+
   async commit(): Promise<CommitReceipt> {
-    const receipt = await this.executor.execute(this.plan.list());
+    const receipt = await this.commitMoves(this.plan.list());
     this.plan.discard();
     return receipt;
   }
