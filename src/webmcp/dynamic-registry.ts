@@ -159,7 +159,10 @@ export class DynamicWebMcpRegistry {
       case 'status':
         return empty('Return the current local library, staged-plan, custody and capability summary.', true, () => this.engine.status())
       case 'open_sample_album':
-        return empty('Open the bundled 500-photo local sample album; no folder picker or network request.', false, () => this.engine.openSampleAlbum())
+        return empty('Open the bundled 500-photo local sample album; no folder picker or network request.', false, () => {
+          this.engine.openSampleAlbum()
+          return this.engine.status()
+        })
       case 'find_duplicates':
         return {
           name, description: 'Find exact or normal duplicate groups and return one opaque result handle, never photo rows.',
@@ -196,7 +199,8 @@ export class DynamicWebMcpRegistry {
           inputSchema: oneString('result_id'), annotations: { readOnlyHint: false }, allowedKeys: ['result_id'],
           run: (input) => {
             if (typeof input.result_id !== 'string') throw new Error('invalid_input')
-            return this.engine.select(input.result_id)
+            this.engine.select(input.result_id)
+            return this.engine.selectionReceipt()
           },
         }
       case 'peek':

@@ -45,6 +45,33 @@ export interface ResultReceipt {
   coverage?: number
 }
 
+export interface ToolStatusReceipt {
+  version: number
+  libraryGeneration: number
+  phase: ShoeboxPhase
+  libraryId?: string
+  libraryName?: string
+  totalCount: number
+  photoCount: number
+  selectedCount: number
+  plan: ShoeboxSnapshot['plan']
+  counters: ShoeboxSnapshot['counters']
+  meaning: ShoeboxSnapshot['meaning']
+  activity: string
+}
+
+export interface SelectionReceipt {
+  version: number
+  libraryGeneration: number
+  phase: ShoeboxPhase
+  selectedCount: number
+  plan: ShoeboxSnapshot['plan']
+  counters: ShoeboxSnapshot['counters']
+  meaning: ShoeboxSnapshot['meaning']
+  activity: string
+  deletes: 0
+}
+
 export interface ShoeboxSnapshot {
   version: number
   phase: ShoeboxPhase
@@ -168,8 +195,37 @@ export class ShoeboxEngine {
     return names
   }
 
-  status(): ShoeboxSnapshot {
-    return this.currentSnapshot
+  status(): Readonly<ToolStatusReceipt> {
+    const snapshot = this.currentSnapshot
+    return deepFreeze({
+      version: snapshot.version,
+      libraryGeneration: snapshot.libraryGeneration,
+      phase: snapshot.phase,
+      ...(snapshot.libraryId ? { libraryId: snapshot.libraryId } : {}),
+      ...(snapshot.libraryName ? { libraryName: snapshot.libraryName } : {}),
+      totalCount: snapshot.totalCount,
+      photoCount: snapshot.totalCount,
+      selectedCount: snapshot.selectedIds.length,
+      plan: snapshot.plan,
+      counters: snapshot.counters,
+      meaning: snapshot.meaning,
+      activity: snapshot.activity,
+    })
+  }
+
+  selectionReceipt(): Readonly<SelectionReceipt> {
+    const snapshot = this.currentSnapshot
+    return deepFreeze({
+      version: snapshot.version,
+      libraryGeneration: snapshot.libraryGeneration,
+      phase: snapshot.phase,
+      selectedCount: snapshot.selectedIds.length,
+      plan: snapshot.plan,
+      counters: snapshot.counters,
+      meaning: snapshot.meaning,
+      activity: snapshot.activity,
+      deletes: 0,
+    })
   }
 
   findDuplicates(mode: 'exact' | 'normal'): ResultReceipt {

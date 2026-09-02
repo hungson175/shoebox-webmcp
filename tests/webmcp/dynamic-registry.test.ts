@@ -120,4 +120,50 @@ describe('DynamicWebMcpRegistry', () => {
     expect(JSON.stringify(publicWindow)).not.toMatch(/commit|discard|export/i)
     expect(generations.flatMap(names).some((name) => /commit|discard|export/i.test(name))).toBe(false)
   })
+
+  it('keeps every non-peek tool result bounded and pixel-free across S0, S1 and S2', async () => {
+    const checked = new Set<string>()
+    function expectBounded(name: string, result: unknown) {
+      const json = JSON.stringify(result)
+      const object = result as Record<string, unknown>
+      checked.add(name)
+      expect(Buffer.byteLength(json, 'utf8'), `${name} result bytes`).toBeLessThanOrEqual(2_000)
+      expect(Array.isArray(object.photos), `${name} must not expose photo rows`).toBe(false)
+      expect(json, `${name} must not expose private row fields`).not.toMatch(/"(?:groups|selectedIds|thumbnailUrl|peekDataUrl|memberIds|photoIds)"/)
+      expect(json, `${name} must not expose pixels`).not.toContain('data:image')
+      expect(Object.isFrozen(result)).toBe(true)
+    }
+
+    const browse = setup()
+    await browse.registry.start()
+    expectBounded('status', await browse.registry.invokeForTest('status', {}))
+    expectBounded('open_sample_album', await browse.registry.invokeForTest('open_sample_album', {}))
+    const duplicates = await browse.registry.invokeForTest('find_duplicates', { sensitivity: 'normal' }) as { resultId: string }
+    expectBounded('find_duplicates', duplicates)
+    expectBounded('find_bursts', await browse.registry.invokeForTest('find_bursts', {}))
+    expectBounded('find_blurry', await browse.registry.invokeForTest('find_blurry', {}))
+    expectBounded('find_by_meaning', await browse.registry.invokeForTest('find_by_meaning', { query: 'pagoda' }))
+    expectBounded('select', await browse.registry.invokeForTest('select', { result_id: duplicates.resultId }))
+    expectBounded('status', await browse.registry.invokeForTest('status', {}))
+    const peek = await browse.registry.invokeForTest('peek', { group_id: 'g1' }) as { thumbnails: { dataUrl: string; width: number; height: number }[] }
+    expect(peek.thumbnails.every((item) => item.dataUrl.startsWith('data:image/') && item.width <= 96 && item.height <= 96)).toBe(true)
+
+    for (const [name, input] of [
+      ['keep_sharpest', {}],
+      ['stage_move', { to: 'Trash' }],
+      ['build_album', { name: 'Album A', target_count: 2 }],
+    ] as const) {
+      const selected = setup()
+      await selected.registry.start()
+      await selected.registry.invokeForTest('open_sample_album', {})
+      const found = await selected.registry.invokeForTest('find_duplicates', { sensitivity: 'normal' }) as { resultId: string }
+      await selected.registry.invokeForTest('select', { result_id: found.resultId })
+      expectBounded(name, await selected.registry.invokeForTest(name, input))
+    }
+
+    expect([...checked].sort()).toEqual([
+      'build_album', 'find_blurry', 'find_bursts', 'find_by_meaning', 'find_duplicates',
+      'keep_sharpest', 'open_sample_album', 'select', 'stage_move', 'status',
+    ])
+  })
 })
