@@ -281,12 +281,30 @@ describe("BrowserThumbnailPipeline", () => {
       ledger,
     });
 
-    const result = await pipeline.create(new File(["photo"], "a.jpg", { type: "image/jpeg" }));
+    const result = await pipeline.create(
+      new File(["photo"], "a.jpg", { type: "image/jpeg" }),
+      { countAsRequested: true },
+    );
 
     expect(render).toHaveBeenCalledWith(bitmap, 96, 48, "image/webp", 0.82);
     expect(result).toMatchObject({ width: 96, height: 48, mimeType: "image/webp" });
     expect(close).toHaveBeenCalledOnce();
     expect(ledger.snapshot().thumbnailPixelsRequested).toBe(96 * 48);
+  });
+
+  it("does not count ordinary grid thumbnails as pixels requested by the model", async () => {
+    const bitmap = { width: 100, height: 100, close: vi.fn() } as unknown as ImageBitmap;
+    const ledger = new CustodyLedger();
+    const pipeline = new BrowserThumbnailPipeline({
+      createImageBitmap: vi.fn(async () => bitmap),
+      render: vi.fn(async () => new Blob(["thumb"])),
+      ledger,
+    });
+
+    await pipeline.create(new File(["x"], "grid.jpg"));
+
+    expect(ledger.snapshot().thumbnailGroupsRequested).toBe(0);
+    expect(ledger.snapshot().thumbnailPixelsRequested).toBe(0);
   });
 
   it("never upscales a small source and closes the bitmap when rendering fails", async () => {
