@@ -158,6 +158,32 @@ describe("SampleAlbumLoader", () => {
     expect(fetcher.mock.calls.every(([url]) => String(url).startsWith("https://example.test/"))).toBe(true);
   });
 
+  it("loads the frozen corpus photos schema and preserves corpus ids", async () => {
+    const root = new MemoryDirectoryHandle("root");
+    const responses = [
+      new Response(JSON.stringify({
+        schema_version: 1,
+        corpus_id: "tet-500",
+        photos: [{ id: "photo-0001", relative_path: "photos/photo-0001.jpg" }],
+      }), { headers: { "content-type": "application/json" } }),
+      new Response("photo-bytes", { headers: { "content-type": "image/jpeg" } }),
+    ];
+    const loader = new SampleAlbumLoader({
+      origin: "https://example.test",
+      root,
+      fetcher: vi.fn(async () => responses.shift()!),
+      ledger: new CustodyLedger(),
+    });
+
+    const loaded = await loader.install("/sample-album/manifest.json");
+
+    expect(loaded).toMatchObject([
+      { id: "photo-0001", relativePath: "photos/photo-0001.jpg", source: "sample" },
+    ]);
+    expect((await (await root.getDirectoryHandle("photos")).getFileHandle("photo-0001.jpg")).content())
+      .toBe("photo-bytes");
+  });
+
   it.each([
     "https://tracker.invalid/manifest.json",
     "/sample/../secret/manifest.json",
