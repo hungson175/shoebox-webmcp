@@ -29,9 +29,10 @@ button { font: inherit; }
 .eyebrow { margin: 0 0 7px; text-transform: uppercase; letter-spacing: .13em; font-size: 11px; font-weight: 700; color: #777363; }
 .hero h1 { margin: 0; max-width: 880px; font: 400 clamp(37px, 4vw, 66px)/.96 'Instrument Serif', Georgia, serif; letter-spacing: -.035em; }
 .hero__dek { max-width: 760px; margin: 17px 0 0; color: #69675d; font-size: 15px; line-height: 1.55; }
-.authority-badge { justify-self: end; display: grid; grid-template-columns: 10px 1fr; column-gap: 10px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.52); box-shadow: 0 10px 32px rgba(73,64,43,.07); }
+.authority-badge { min-width: 230px; justify-self: end; display: grid; grid-template-columns: 10px minmax(0, 1fr); column-gap: 10px; align-items: center; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.52); box-shadow: 0 10px 32px rgba(73,64,43,.07); }
 .authority-badge strong { font-size: 14px; }
-.authority-badge span:last-child { grid-column: 2; color: #777363; font-size: 11px; }
+.authority-badge__boundary, .authority-badge__status { grid-column: 2; color: #777363; font-size: 11px; line-height: 1.35; }
+.authority-badge__status { margin-top: 2px; color: #54614f; }
 .authority-badge__pulse { width: 9px; height: 9px; border-radius: 50%; background: #65805f; box-shadow: 0 0 0 5px rgba(101,128,95,.13); }
 .workspace-shell { max-width: 1520px; margin: auto; overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: rgba(253,250,240,.78); box-shadow: var(--shadow); backdrop-filter: blur(10px); }
 .empty-library { padding: clamp(54px, 10vw, 140px); text-align: center; }

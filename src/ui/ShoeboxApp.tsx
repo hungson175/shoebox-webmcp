@@ -38,6 +38,8 @@ export interface ShoeboxViewModel {
   agent: { active: boolean; label: string; progress: number }
   counters: { pixelsRequestedGroups: number; pixelsRequestedPhotos: number; libraryPhotos: number }
   toolCount: number
+  meaningLabel?: string
+  webMcpStatus?: string
 }
 
 export interface ShoeboxAppProps {
@@ -45,9 +47,9 @@ export interface ShoeboxAppProps {
   onOpenSample?: () => void
   onTogglePhoto: (id: string) => void
   onUnstagePhoto: (id: string, trayName: string) => void
-  onCommit: () => void
-  onExport: () => void
-  onDiscard: () => void
+  onCommit: (event: import('react').MouseEvent<HTMLButtonElement>) => void
+  onExport: (event: import('react').MouseEvent<HTMLButtonElement>) => void
+  onDiscard: (event: import('react').MouseEvent<HTMLButtonElement>) => void
   onDropLibrary: (transfer: DataTransfer) => void | Promise<void>
 }
 
@@ -238,7 +240,8 @@ export function ShoeboxApp({ model, onOpenSample, onTogglePhoto, onUnstagePhoto,
         <div className="authority-badge" aria-label={`${model.toolCount} tools live, none can delete or commit`}>
           <span className="authority-badge__pulse" />
           <strong>{model.toolCount} tools live</strong>
-          <span>none can delete or commit</span>
+          <span className="authority-badge__boundary">none can delete or commit</span>
+          {model.webMcpStatus && <span className="authority-badge__status">{model.webMcpStatus}</span>}
         </div>
       </header>
 
@@ -301,6 +304,7 @@ export function ShoeboxApp({ model, onOpenSample, onTogglePhoto, onUnstagePhoto,
         <footer className="action-dock">
           <div className="custody-counter">
             <span>Pixels requested: {model.counters.pixelsRequestedGroups} {plural(model.counters.pixelsRequestedGroups, 'group')} · {model.counters.pixelsRequestedPhotos} of {model.counters.libraryPhotos} photos</span>
+            {model.meaningLabel && <span>{model.meaningLabel}</span>}
             <strong>{model.plan.deletes} deletes</strong>
           </div>
           <div className="action-dock__buttons">
